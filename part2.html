@@ -26,31 +26,27 @@
         <div class="slidecontainer">
             <h3>Control Panel</h3>
             <p>Number of boids:</p>
-            <input id=numBoids value="300"/>
+            <input id=numBoids value="200"/>
             <p id=flockRangeOut></p>
-            <input id=flockRangeSlider type="range" min="0" max="100" value="12" class="slider">
+            <input id=flockRangeSlider type="range" min="0" max="100" value="10" class="slider">
             <p id=boidMoveSpeedOut></p>
             <input id=boidMoveSpeedSlider type="range" min="1" max="100" value="50" class="slider">
+            <p id=rotationOut></p>
+            <input id=rotationSlider type="range" min="0" max="100" value="50" class="slider">
             <p id=boidSizeOut></p>
-            <input id=boidSizeSlider type="range" min="1" max="500" value="100" class="slider">
+            <input id=boidSizeSlider type="range" min="1" max="100" value="50" class="slider">
             <p id=separationOut></p>
-            <input id=separationSlider type="range" min="0" max="100" value="20" class="slider">
-            <p>Use different separation calculations?</p>
-            <input id=betterSeparationSim type="checkbox" class="slider">
+            <input id=separationSlider type="range" min="0" max="100" value="50" class="slider">
             <p id=cohesionOut></p>
-            <input id=cohesionSlider type="range" min="0" max="200" value="60" class="slider">
-            <p>Use different cohesion calculations?</p>
-            <input id=betterCohesionSim type="checkbox" class="slider">
+            <input id=cohesionSlider type="range" min="0" max="100" value="50" class="slider">
             <p id=alignmentOut></p>
-            <input id=alignmentSlider type="range" min="0" max="400" value="40" class="slider">
-            <p>Use different alignment calculations?</p>
-            <input id=betterAlignmentSim type="checkbox" class="slider">
+            <input id=alignmentSlider type="range" min="0" max="100" value="50" class="slider">
             <p id=alphaOut></p>
             <input id=alphaSlider type="range" min="0" max="10" value="9" class="slider">
             <p id=mouseInputOut></p>
             <input id=mouseInputBox class="slider" type="checkbox" checked="true">
             <p id=flockingColorsOut>Color-specific flocking?</p>
-            <input id=flockingColorsBox class="slider" type="checkbox" checked="true">
+            <input id=flockingColorsBox class="slider" type="checkbox" checked="false">
             <p id=avoidWallsOut></p>
             <input id=avoidWallsBox class="slider" type="checkbox">
         </div>

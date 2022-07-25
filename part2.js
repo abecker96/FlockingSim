@@ -4,7 +4,7 @@ var canvas = document.getElementById("myCanvas");
 var c = canvas.getContext("2d");
 
 //scale canvas to window height
-canvas.width  = window.innerWidth;
+canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
 //method of limiting framerate from
@@ -25,365 +25,208 @@ const boidColors = [
     '#0C85FA',
 ]
 
-
-function normalize(startPos, endPos) {
-    //set at origin
-    var x = endPos.x - startPos.x;
-    var y = endPos.y - startPos.y;
-    //find the length
-    var length = Math.sqrt(x*x + y*y);
-    //finally normalize
-    x = x/length;
-    y = y/length;
-    return new Vert(x, y);
-}
-
-class Vert {
+class Vec2 {
     constructor(x, y) {
         this.x = x;
         this.y = y;
     }
-    dist(other) {
-        var distX = this.x - other.x;
-        var distY = this.y - other.y;
-        return Math.sqrt((distX**2) + (distY**2));
+    add(other) {
+        return new Vec2(this.x + other.x, this.y + other.y);
+    }
+    sub(other) {
+        return new Vec2(this.x - other.x, this.y - other.y);
+    }
+    mult(scalar) {
+        return new Vec2(this.x * scalar, this.y * scalar);
+    }
+    div(scalar) {
+        if (scalar != 0) {
+            return new Vec2(this.x / scalar, this.y / scalar);
+        }
+        else {
+            return new Vec2(0, 0);
+        }
+    }
+    mag() {
+        return Math.sqrt(this.x * this.x + this.y * this.y);
+    }
+    normalize() {
+        var mag = this.mag();
+        if (mag > 0) {
+            return this.div(mag);
+        }
+        else {
+            return new Vec2(0, 0);
+        }
+    }
+    // Rotate vector clockwise by angle in radians
+    rotate(angle) {
+        var x = this.x;
+        var y = this.y;
+        return new Vec2(x * Math.cos(angle) - y * Math.sin(angle), x * Math.sin(angle) + y * Math.cos(angle));
+    }
+    limit(max) {
+        if (this.mag() > max) {
+            return this.normalize().mult(max);
+        }
+    }
+    copy() {
+        return new Vec2(this.x, this.y);
+    }
+    static random() {
+        return new Vec2(Math.random() * 2 - 1, Math.random() * 2 - 1);
     }
 }
 
-var origin = new Vert(0,0);
+var origin = new Vec2(0, 0);
 var mousePos = origin;
 
 window.addEventListener('mousemove', e => {
     var rect = canvas.getBoundingClientRect();
-    mousePos.x = e.clientX - rect.left,
-    mousePos.y = e.clientY - rect.top
+    mousePos.x = e.clientX - rect.left;
+    mousePos.y = e.clientY - rect.top;
 });
-
-class Turtle {
-    constructor(x, y, angle) {
-        this.x = x;
-        this.y = y;
-        this.angle = angle;
-    }
-
-    placeVertex() {
-        return new Vert(this.x, this.y);
-    }
-    turn(delta) {
-        this.angle += delta;
-        this.angle = this.angle % (2*Math.PI);
-    }
-    forward(dist) {
-        this.x += dist * Math.cos(this.angle);
-        this.y += dist * Math.sin(this.angle);
-    }
-}
-
-class KochSnowflake {
-    constructor(xPos, yPos, baseLength, fractalLevel) {
-        this.baseLength = baseLength;
-        this.turtle = new Turtle(xPos, yPos, 0)
-
-        this.turtle.forward(-1 * baseLength/2)
-        this.vertices = [this.turtle.placeVertex()];
-        for(let i = 0; i < 3; i++) {
-            this.generateVertices(fractalLevel, baseLength);
-            this.turtle.turn(4* (Math.PI/3.0));
-        }
-    }
-
-    generateVertices(currentLevel, sideLength) {
-        if(currentLevel <= 0) {
-            this.turtle.forward(sideLength);
-            this.vertices.push(this.turtle.placeVertex());
-            return;
-        }
-        sideLength = sideLength/3.0;
-        this.generateVertices(currentLevel-1, sideLength);
-        this.turtle.turn(Math.PI/3.0);
-        this.generateVertices(currentLevel-1, sideLength);
-        this.turtle.turn(4* (Math.PI/3.0));
-        this.generateVertices(currentLevel-1, sideLength);
-        this.turtle.turn(Math.PI/3.0);
-        this.generateVertices(currentLevel-1, sideLength);
-
-        return;
-    }
-
-    draw() {
-        c.lineWidth = 1;
-        c.strokeStyle = '#EEFFFF';
-        c.fillStyle = '#181818';
-
-        c.beginPath();
-        c.moveTo(this.vertices[0].x, this.vertices[0].y);
-        for(let i = 1; i < this.vertices.length; i++) {
-            c.lineTo(this.vertices[i].x, this.vertices[i].y);
-        }
-        //console.log(this.vertices);
-        c.closePath();
-
-        c.stroke();
-        c.fill();
-    }
-}
 
 //General information about boids derived from
 //  https://www.red3d.com/cwr/boids/
 class Boid {
-    constructor(angle, pos, size, avoidance, cohesion, alignment, color, speed, flockRadius) {
-        this.angle = angle;
+    constructor(direction, pos, color) {
+        this.direction = direction;
         this.pos = pos;
-        this.flockRadius = flockRadius;
-        this.moveSpeed = speed;   //TODO play around with these values
-        this.sideLength = size / 10.0;      
-        this.separation = avoidance;
-        this.obstacleAvoidance = this.separation *2;
-        this.alignment = alignment;
-        this.cohesion = cohesion;
         this.color = color;
+    }
+    setSeparation(value) {
+        this.separation = value;
+    }
+    setCohesion(value) {
+        this.cohesion = value*0.2;
+    }
+    setAlignment(value) {
+        this.alignment = value*0.05;
+    }
+    setObstacleAvoidance(value) {
+        this.obstacleAvoidance = value;
+    }
+    setFlockRadius(value) {
+        this.flockRadius = canvas.height * (value/100);
+    }
+    setMoveSpeed(value) {
+        this.moveSpeed = (0.6 + (Math.random() * 0.4)) * (value/8);
+    }
+    setSize(value) {
+        this.sideLength = value/5;
     }
     determineFlock(others) {
         var currentFlock = [];
-        others.forEach((other, index) => {
-            var distX = other.pos.x - this.pos.x;
-            var distY = other.pos.y - this.pos.y;
-            var dist = Math.sqrt(distX**2 + distY**2);
+        others.forEach((other) => {
+            var dist = this.pos.sub(other.pos);
 
-            if((dist < this.flockRadius) && !(other === this) ) {
-                if(colorsFlockBox.checked == false){
-                    currentFlock.push(index);
+            if ((dist.mag() <= this.flockRadius) && !(other === this)) {
+                if (colorsFlockBox.checked == false) {
+                    currentFlock.push(other);
                 }
-                else if(other.color == this.color) {
-                    currentFlock.push(index);
+                else if (other.color == this.color) {
+                    currentFlock.push(other);
                 }
             }
         });
         return currentFlock;
     }
-    isLeftOrRight(coords) {
-        //determining whether a point is on one side of a vector or the other
-        //https://math.stackexchange.com/questions/274712/calculate-on-which-side-of-a-straight-line-is-a-given-point-located
-        var nextPos = this.nextPos();
-        var Bx = nextPos.x;
-        var By = nextPos.y;
-        var direction = (coords.x - this.pos.x)*(By - this.pos.y) - (coords.y - this.pos.y)*(Bx - this.pos.x);
-        //console.log(direction);   //Debug
-        return direction;   //proportional to distance! 100 = far away, 1 = close
-    }
-    nextPos() {
-        var Dx = this.pos.x + this.moveSpeed * Math.cos(this.angle);
-        var Dy = this.pos.y + this.moveSpeed * Math.sin(this.angle);
-        return new Vert(Dx, Dy);
-    }
-    changeDirection(desiredDirection, coefficient) {
-        this.angle += (desiredDirection - this.angle)*coefficient;
-        this.angle %= 2*Math.PI;
-    }
-    turnLeft(desiredDirection, coefficient) {
-        this.angle -= (desiredDirection - this.angle)*coefficient;
-        this.angle %= 2*Math.PI;
-    }
-    turnRight(desiredDirection, coefficient) {
-        this.angle += (desiredDirection - this.angle)*coefficient;
-        this.angle %= 2*Math.PI;
-    }
     separate(others) {
-        if(betterSeparationSim.checked == true){
-            for(let i = 0; i < others.length; i++) {
-                if(!(others[i] === this)) {
-                    var urgency = (1/this.pos.dist(others[i].pos))**2;
-                    var direction = Math.atan2(others[i].pos.y - this.pos.y, others[i].pos.x - this.pos.x)
-                    this.changeDirection(-direction, urgency*this.separation);
-                }
+        var separationVec = new Vec2(0, 0);
+        others.forEach(other => {
+            if (other != this) {
+                var direction = this.pos.sub(other.pos);
+                var dist = direction.mag();
+                direction = direction.mult(1 / (dist * dist));
+                separationVec = separationVec.add(direction);
             }
-        } else {
-            for(let i = 0; i < others.length; i++) {
-                if(!(others[i] === this)) {
-                    var urgency = (1/this.pos.dist(others[i].pos))**2;
-                    var direction = Math.sign(this.isLeftOrRight(others[i].pos));
-                    this.angle += urgency * direction * this.separation;
-                }
-            }
-        }
+        });
 
-        //avoid mouse as well
-        if(mouseInputBox.checked == true) {
-            var urgency = (1/this.pos.dist(mousePos))**2;
-            var direction = Math.sign(this.isLeftOrRight(mousePos));
-            this.angle += urgency * direction * 100;
-        }
+        // avoid mouse
+        var direction = this.pos.sub(mousePos);
+        var dist = direction.mag();
+        direction = direction.mult(1 / (dist * dist));
+        separationVec = separationVec.add(direction);
+
+        return separationVec;
     }
-    align(flock, others) {
-        if(betterAlignmentSim.checked == true) {
-            //To get the average angle of a boid's flock, can't just average
-            //Need to generate a vector of normal length for every boid, then average those vectors
-            var totalX = 0;
-            var totalY = 0.01;
-            for(let i = 0; i < flock.length; i++) {
-                var normalVector = normalize(others[flock[i]].pos, others[flock[i]].nextPos());
-
-                totalX += normalVector.x;
-                totalY += normalVector.y;
+    align(flock) {
+        var avgDirection = new Vec2(0, 0);
+        flock.forEach((other) => {
+            if (other != this) {
+                avgDirection = avgDirection.add(other.direction);
             }
-            var averageVector = new Vert(totalX/flock.length, totalY/flock.length);
-
-            var direction = Math.atan2(averageVector.y, averageVector.x);
-
-            this.changeDirection(direction, this.alignment);
-        } else {
-            //To get the average angle of a boid's flock, can't just average
-            //Need to generate a vector of normal length for every boid, then average those vectors
-            var totalX = 0;
-            var totalY = 0;
-            for(let i = 0; i < flock.length; i++) {
-                var boidVector = normalize(this.pos, others[flock[i]].nextPos());
-
-                totalX += boidVector.x;
-                totalY += boidVector.y;
-            }
-            var averageVector = new Vert(totalX/flock.length, totalY/flock.length);
-
-            if(this.isLeftOrRight(averageVector) < 0) {
-                //I would like to just add this.
-                //In theory, I should be able to just add this.
-                //I don't have time to figure out why I can't just add this right now.
-                //This works though
-                this.angle -= this.alignment;
-            }
-        }
+        });
+        avgDirection.normalize();
+        return avgDirection;
     }
-    cohere(flock, others) {
-        if(betterCohesionSim.checked == true) {
-            var avgPos;
-            var totalPosX = 0;
-            var totalPosY = 0;
-            for(let i = 0; i < flock.length; i++) {
-                totalPosX += others[flock[i]].pos.x;
-                totalPosY += others[flock[i]].pos.y;
+    cohere(flock) {
+        var avgPos = new Vec2(0, 0);
+        var count = 0;
+        flock.forEach((other) => {
+            if (other != this) {
+                avgPos = avgPos.add(other.pos);
+                count++;
             }
-            avgPos = new Vert(totalPosX/flock.length, totalPosY/flock.length);
-            var direction = Math.atan2(avgPos.y - this.pos.y, avgPos.x - this.pos.x);
-
-            //this.changeDirection(direction, this.cohesion);
-            var urgency = this.pos.dist(avgPos)^2;
-            this.changeDirection(direction, urgency*this.cohesion);
-        } else {
-            var avgPos;
-            var totalPosX = 0;
-            var totalPosY = 0;
-            for(let i = 0; i < flock.length; i++) {
-                totalPosX += others[flock[i]].pos.x;
-                totalPosY += others[flock[i]].pos.y;
-            }
-            var avgPos = new Vert(totalPosX/flock.length, totalPosY/flock.length);
-
-            if(this.isLeftOrRight(avgPos) < 0) {
-                this.angle += this.cohesion;
-            }
+        });
+        if (count > 0) {
+            avgPos = avgPos.div(count);
+            avgPos = avgPos.sub(this.pos);
+            avgPos = avgPos.normalize();
         }
+        return avgPos;
     }
     avoidWalls() {
-        var next = this.nextPos();
-        var facingRight = Math.sign(next.x - this.pos.x);
-        var facingUp = -1*Math.sign(next.y - this.pos.y);
-        var rightWall = false;
-        var leftWall = false;
-        var topWall = false;
-        var bottomWall = false;
-        var verticalUrgency = 0;
-        var horizontalUrgency = 0;
-        if(this.pos.x > canvas.width/2) {   
-            //consider collision with right wall
-            rightWall = true;
-            horizontalUrgency = 1/(this.pos.x - canvas.width)**2;
-        }
-        else{
-            //consider collision with left wall
-            leftWall = true;
-            horizontalUrgency = 1/(this.pos.x**2);
-        }
-        if(this.pos.y > canvas.width/2) {
-            //consider collision with bottom wall
-            bottomWall = true;
-            verticalUrgency = 1/(this.pos.y - canvas.height)**2;
-        }
-        else{
-            //consider collision with top wall
-            topWall = true;
-            verticalUrgency = 1/(this.pos.y**2);
-        }
-
-        horizontalUrgency *= 100;
-        verticalUrgency *= 100;
-        if(topWall){
-            if(facingRight > 0) {
-                this.turnRight(Math.PI/2, verticalUrgency);
-            } else {
-                this.turnLeft(Math.PI/2, verticalUrgency);
-            }
-        } else if(bottomWall){
-            if(facingRight > 0) {
-                this.turnLeft(3*Math.PI/2, verticalUrgency);
-            } else {
-                this.turnRight(3*Math.PI/2, verticalUrgency);
-            }
-        }
-        if(leftWall){
-            if(facingUp > 0) {
-                this.turnRight(0, horizontalUrgency);
-            } else {
-                this.turnLeft(0, horizontalUrgency);
-            }
-        } else if(rightWall) {
-            if(facingUp > 0) {
-                this.turnLeft(Math.PI, horizontalUrgency);
-            } else {
-                this.turnRight(Math.PI, horizontalUrgency);
-            }
-        }
-        //this.angle += horizontalDirection * horizontalUrgency*100;
     }
     move() {
-        this.pos.x += this.moveSpeed * Math.cos(this.angle);
-        this.pos.y += this.moveSpeed * Math.sin(this.angle);
-
-        if(this.pos.x <= -this.sideLength) {
-            this.pos.x += canvas.width;
+        this.direction = this.direction.normalize();
+        this.pos = this.pos.add(this.direction.mult(this.moveSpeed));
+        if (this.pos.x > canvas.width) {
+            this.pos.x = 0;
         }
-        if(this.pos.y <= -this.sideLength) {
-            this.pos.y += canvas.height;
+        else if (this.pos.x < 0) {
+            this.pos.x = canvas.width;
         }
-        this.pos.x %= (canvas.width + this.sideLength);
-        this.pos.y %= (canvas.height + this.sideLength);
-
-        //this.angle = 0;
-        //console.log(this.pos);    //Debug
+        if (this.pos.y > canvas.height) {
+            this.pos.y = 0;
+        }
+        else if (this.pos.y < 0) {
+            this.pos.y = canvas.height;
+        }
     }
     update(others) {
         var flock = this.determineFlock(others);
-        if(flock.length > 0) {
-            this.align(flock, others);
-            this.cohere(flock, others);
+        var alignVec = new Vec2(0, 0);
+        var cohereVec = new Vec2(0, 0);
+        var separateVec = new Vec2(0, 0);
+        if (flock.length > 0) {
+            alignVec = this.align(flock);
+            cohereVec = this.cohere(flock);
         }
-        this.separate(others);
-        if(avoidWallsBox.checked == true) {
-            this.avoidWalls();
+        separateVec = this.separate(others);
+        if (avoidWallsBox.checked == true) {
+            // this.avoidWalls();
         }
+        alignVec = alignVec.mult(this.alignment);
+        cohereVec = cohereVec.mult(this.cohesion);
+        separateVec = separateVec.mult(this.separation);
+        this.direction = this.direction.add(alignVec).add(cohereVec).add(separateVec);
         this.move();
     }
     draw() {
-        //find the other to vertices
-        var p2x = this.pos.x - Math.cos(this.angle + Math.PI/12)*this.sideLength;
-        var p2y = this.pos.y - Math.sin(this.angle + Math.PI/12)*this.sideLength;
-
-        var p3x = this.pos.x - Math.cos(this.angle - Math.PI/12)*this.sideLength;
-        var p3y = this.pos.y - Math.sin(this.angle - Math.PI/12)*this.sideLength;
+        //find the other to vertices of the triangle
+        var normalizedDirection = this.direction.normalize();
+        var right = normalizedDirection.rotate(Math.PI / 2);
+        var tip = this.pos.add(normalizedDirection.mult(this.sideLength));
+        var back = this.pos.sub(normalizedDirection.mult(this.sideLength));
+        var backRight = back.add(right.mult(this.sideLength / 1.5));
+        var backLeft = back.sub(right.mult(this.sideLength / 1.5));
 
         c.beginPath();
-        c.moveTo(this.pos.x, this.pos.y);
-        c.lineTo(p2x, p2y);
-        c.lineTo(p3x, p3y);
+        c.moveTo(tip.x, tip.y);
+        c.lineTo(backLeft.x, backLeft.y);
+        c.lineTo(backRight.x, backRight.y);
         c.closePath();
 
         c.lineWidth = 1;
@@ -398,38 +241,32 @@ class Boid {
     }
 }
 
-function drawAll(snowflake, boids) {
-    snowflake.draw();
-
-    boids.forEach(boid =>{
-         boid.update(boids);
-         boid.draw();
+function drawAll(boids) {
+    boids.forEach(boid => {
+        boid.update(boids);
+        boid.draw();
     });
 }
 
-var snowflake = new KochSnowflake(canvas.width/2, canvas.height/2, canvas.height/4, 5);
-
-
-
 function startDrawLoop() {
-    fpsInterval = 1000/fps;
+    fpsInterval = 1000 / fps;
     then = Date.now();
     drawLoop();
 }
 
 function drawLoop() {
-    if(stop) {
+    if (stop) {
         return;
     }
-    
+
     window.requestAnimationFrame(drawLoop);
 
     //limit framerate to 60fps
     now = Date.now();
-    elapsed = now-then;
+    elapsed = now - then;
 
-    if(elapsed > fpsInterval) {
-        then=now - (elapsed %fpsInterval);
+    if (elapsed > fpsInterval) {
+        then = now - (elapsed % fpsInterval);
 
         //draw things
         c.save();
@@ -438,100 +275,78 @@ function drawLoop() {
         c.fillRect(0, 0, canvas.width, canvas.height);
         c.fill();
         c.restore();
-        
-        drawAll(snowflake, boids);
+
+        drawAll(boids);
     }
 }
 
-
-
-
 var flockRangeSlider = document.getElementById("flockRangeSlider");
 var flockRangeOutput = document.getElementById("flockRangeOut");
-flockRangeOutput.innerHTML = "Flocking range: screen Height * " + flockRangeSlider.value/100;
-flockRangeSlider.oninput = function() {
-    flockRangeOutput.innerHTML = "Flocking range: screen Height * " + flockRangeSlider.value/100;
+flockRangeOutput.innerHTML = "Flocking range: screen Height * " + flockRangeSlider.value / 100;
+flockRangeSlider.oninput = function () {
+    flockRangeOutput.innerHTML = "Flocking range: screen Height * " + flockRangeSlider.value / 100;
     boids.forEach(boid => {
-        boid.flockRadius = canvas.height * (this.value)/100;
+        boid.setFlockRadius(flockRangeSlider.value);
     });
 }
 
 var boidMoveSpeedSlider = document.getElementById("boidMoveSpeedSlider");
 var moveSpeedOut = document.getElementById("boidMoveSpeedOut");
-moveSpeedOut.innerHTML = "Boid speed: " + boidMoveSpeedSlider.value;
-boidMoveSpeedSlider.oninput = function() {
-    moveSpeedOut.innerHTML = "Boid speed: " + boidMoveSpeedSlider.value;
+moveSpeedOut.innerHTML = "Boid speed: " + boidMoveSpeedSlider.value/100;
+boidMoveSpeedSlider.oninput = function () {
+    moveSpeedOut.innerHTML = "Boid speed: " + boidMoveSpeedSlider.value/100;
     boids.forEach(boid => {
-        //boid.moveSpeed = (Math.random() * (2 - 1) + 1)*(this.value/10) * (canvas.height/1250);
-        boid.moveSpeed = (this.value/10) * (canvas.height/1250);
+        boid.setMoveSpeed(this.value);
     });
 }
 
 var boidSizeSlider = document.getElementById("boidSizeSlider");
 var boidSizeOut = document.getElementById("boidSizeOut");
-boidSizeOut.innerHTML = "Boid Size: " + boidSizeSlider.value;
-boidSizeSlider.oninput = function() {
-    boidSizeOut.innerHTML = "Boid size: " + this.value;
+boidSizeOut.innerHTML = "Boid Size: " + boidSizeSlider.value/100;
+boidSizeSlider.oninput = function () {
+    boidSizeOut.innerHTML = "Boid size: " + this.value/100;
     boids.forEach(boid => {
-        boid.sideLength = this.value/8;
+        boid.setSize(this.value);
     });
 }
 
 var boidSeparationSlider = document.getElementById("separationSlider");
 var boidSeparationOut = document.getElementById("separationOut");
-boidSeparationOut.innerHTML = "Separation weight: " + boidSeparationSlider.value;
+boidSeparationOut.innerHTML = "Separation weight: " + boidSeparationSlider.value/100;
 boidSeparationSlider.oninput = function () {
-    boidSeparationOut.innerHTML = "Separation weight: " + boidSeparationSlider.value;
-    var separationFactor;
-    if(betterCohesionSim.checked == true) {
-        separationFactor = 10;
-    } else {
-        separationFactor = 2;
-    }
+    boidSeparationOut.innerHTML = "Separation weight: " + boidSeparationSlider.value/100;
     boids.forEach(boid => {
-        boid.separation = boidSeparationSlider.value/separationFactor;
+        boid.setSeparation(this.value);
     });
 }
 
 var boidCohesionSlider = document.getElementById("cohesionSlider");
 var boidCohesionOut = document.getElementById("cohesionOut");
-boidCohesionOut.innerHTML = "Cohesion weight: " + boidCohesionSlider.value;
+boidCohesionOut.innerHTML = "Cohesion weight: " + boidCohesionSlider.value/100;
 boidCohesionSlider.oninput = function () {
-    boidCohesionOut.innerHTML = "Cohesion weight: " + boidCohesionSlider.value;
-    var cohesionFactor;
-    if(betterCohesionSim.checked == true) {
-        cohesionFactor = 1/250000;
-    } else {
-        cohesionFactor = 1/2000;
-    }
+    boidCohesionOut.innerHTML = "Cohesion weight: " + boidCohesionSlider.value/100;
     boids.forEach(boid => {
-        boid.cohesion = Math.PI * (cohesionFactor * boidCohesionSlider.value);
+        boid.setCohesion(this.value);
     });
 }
 
 var boidAlignmentSlider = document.getElementById("alignmentSlider");
 var boidAlignmentOut = document.getElementById("alignmentOut");
-boidAlignmentOut.innerHTML = "Alignment weight: " + boidAlignmentSlider.value;
+boidAlignmentOut.innerHTML = "Alignment weight: " + boidAlignmentSlider.value/100;
 boidAlignmentSlider.oninput = function () {
-    boidAlignmentOut.innerHTML = "Alignment weight: " + boidAlignmentSlider.value;
-    var alignmentFactor;
-    if(betterAlignmentSim.checked == true) {
-        alignmentFactor = 1/20000;
-    } else {
-        alignmentFactor = 1/2000;
-    }
+    boidAlignmentOut.innerHTML = "Alignment weight: " + boidAlignmentSlider.value/100;
     boids.forEach(boid => {
-        boid.alignment = Math.PI * (alignmentFactor*boidAlignmentSlider.value);
+        boid.setAlignment(this.value);
     });
 }
 
 var alphaSlider = document.getElementById("alphaSlider");
 var alphaOut = document.getElementById("alphaOut");
 alphaOut.innerHTML = "Trails length: " + alphaSlider.value;
-alphaValue = (10-alphaSlider.value)/10;;
+alphaValue = (10 - alphaSlider.value) / 10;;
 alphaSlider.oninput = function () {
     alphaOut.innerHTML = "Trails length: " + alphaSlider.value;
-    alphaValue = (10-alphaSlider.value)/10;
+    alphaValue = (10 - alphaSlider.value) / 10;
 }
 
 mouseInputBox = document.getElementById("mouseInputBox");
@@ -540,27 +355,14 @@ mouseInputOut.innerHTML = "Avoid mouse?";
 
 avoidWallsBox = document.getElementById("avoidWallsBox");
 var avoidWallsOut = document.getElementById("avoidWallsOut");
-avoidWallsOut.innerHTML = "Avoid walls? (not recommended)";
+avoidWallsOut.innerHTML = "Avoid walls?";
 
 colorsFlockBox = document.getElementById("flockingColorsBox");
-betterAlignmentSim = document.getElementById("betterAlignmentSim");
-betterCohesionSim = document.getElementById("betterCohesionSim");
-betterSeparationSim = document.getElementById("betterSeparationSim");
-
-betterSeparationSim.oninput = function () {
-    if(betterSeparationSim.checked == true) {
-        boidSeparationSlider.max = 25;
-    } else {
-        boidSeparationSlider.max = 100;
-    }
-}
-
-
 
 function setNumBoids(desiredNum) {
     var currentBoids = boids.length;
-    if(currentBoids > desiredNum) {
-        for(let i = 0; i < currentBoids - desiredNum; i++) {
+    if (currentBoids > desiredNum) {
+        for (let i = 0; i < currentBoids - desiredNum; i++) {
             boids.pop();
         }
         boids.forEach(boid => {
@@ -568,20 +370,19 @@ function setNumBoids(desiredNum) {
         });
     }
     else {
-        for(let i = boids.length; i < desiredNum; i++) {
-            var x = Math.random()*canvas.width;
-            var y = Math.random()*canvas.height;
-            var angle = Math.random()*(2*Math.PI);
-            var size = boidSizeSlider.value;
-            var avoidance = boidSeparationSlider.value/2;
-            var cohesion = boidCohesionSlider.value/250000;
+        for (let i = boids.length; i < desiredNum; i++) {
+            var x = Math.random() * canvas.width;
+            var y = Math.random() * canvas.height;
             var color = Math.floor(Math.random() * 5);
-            var speed = (boidMoveSpeedSlider.value/10) * (canvas.height/1250)
-            var flockRadius = canvas.height * (flockRangeSlider.value)/100
-            var alignment = Math.PI * (boidAlignmentSlider.value/20000);
-            boids.push(new Boid(angle, new Vert(x, y), size, avoidance, cohesion, alignment, color, speed, flockRadius));
+            boids.push(new Boid(Vec2.random().normalize(), new Vec2(x, y), color));
+            boids[boids.length - 1].setFlockRadius(flockRangeSlider.value);
+            boids[boids.length - 1].setMoveSpeed(boidMoveSpeedSlider.value);
+            boids[boids.length - 1].setSeparation(boidSeparationSlider.value);
+            boids[boids.length - 1].setCohesion(boidCohesionSlider.value);
+            boids[boids.length - 1].setAlignment(boidAlignmentSlider.value);
+            boids[boids.length - 1].setSize(boidSizeSlider.value);        
         }
-    }   
+    }
 }
 
 var numBoids = document.getElementById("numBoids");
